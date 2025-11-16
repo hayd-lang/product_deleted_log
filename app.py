@@ -22,7 +22,7 @@ def health():
 def product_deleted():
     if request.method == "GET":
         return jsonify({"status": "ok", "info": "GET received on product-deleted endpoint"}), 200
-        
+
     if FLOW_WEBHOOK_TOKEN:
         header_token = request.headers.get("X-Flow-Token")
         if header_token != FLOW_WEBHOOK_TOKEN:
@@ -53,3 +53,33 @@ def product_deleted():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 3000))
     app.run(host="0.0.0.0", port=port)
+
+@app.route("/shopify/product-deleted-webhook", methods=["POST"])
+def product_deleted_webhook():
+    data = request.get_json(silent=True) or {}
+
+    event = {
+        "event_type": "product_deleted",
+        "product": {
+            "id": data.get("id"),
+            "title": data.get("title"),
+            "handle": data.get("handle"),
+            "vendor": data.get("vendor")
+        },
+        "shop": request.headers.get("X-Shopify-Shop-Domain"),
+        "user_id": data.get("admin_graphql_api_id"),
+        "payload": data,
+        "received_at": datetime.utcnow().isoformat() + "Z"
+    }
+
+    # log
+    app.logger.info("Product deleted webhook: %s", event)
+
+    # write to file
+    try:
+        with open(LOG_FILE, "a", encoding="utf-8") as f:
+            f.write(json.dumps(event, ensure_ascii=False) + "\n")
+    except Exception as e:
+        app.logger.error("Failed to write log file: %s", e)
+
+    return jsonify({"status": "ok"}), 200
