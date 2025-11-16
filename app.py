@@ -8,7 +8,7 @@ app = Flask(__name__)
 # Log file path - can change with env var
 LOG_FILE = os.environ.get("DELETED_PRODUCTS_LOG_FILE", "deleted_products.log")
 
-# Optional shared secret so only Flow can call it
+# Optional shared secret so only Flow can call it (you can remove if not using Flow anymore)
 FLOW_WEBHOOK_TOKEN = os.environ.get("FLOW_WEBHOOK_TOKEN")
 
 
@@ -18,11 +18,12 @@ def health():
 
 
 @app.route("/shopify/product-deleted", methods=["POST", "GET"])
-
 def product_deleted():
+    # For browser testing
     if request.method == "GET":
         return jsonify({"status": "ok", "info": "GET received on product-deleted endpoint"}), 200
 
+    # Optional Flow token check
     if FLOW_WEBHOOK_TOKEN:
         header_token = request.headers.get("X-Flow-Token")
         if header_token != FLOW_WEBHOOK_TOKEN:
@@ -50,23 +51,22 @@ def product_deleted():
     return jsonify({"status": "ok"}), 200
 
 
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 3000))
-    app.run(host="0.0.0.0", port=port)
-
 @app.route("/shopify/product-deleted-webhook", methods=["POST"])
 def product_deleted_webhook():
-    # Get JSON that Shopify sent
+    # Parse JSON from Shopify
     data = request.get_json(silent=True) or {}
 
-    # Store domain from headers
+    # Shop domain from headers
     shop_domain = request.headers.get("X-Shopify-Shop-Domain")
 
-    # Log EVERYTHING so we can see what Shopify sends
-    app.logger.info("Product deleted webhook RAW headers: %s", dict(request.headers))
-    app.logger.info("Product deleted webhook RAW body: %s", data)
+    # Debug logs - these should show up in Render
+    print("WEBHOOK RAW BODY:", data, flush=True)
+    print("WEBHOOK SHOP DOMAIN:", shop_domain, flush=True)
 
-    # Extract a few important fields (will be None if missing)
+    app.logger.warning("WEBHOOK RAW BODY: %s", data)
+    app.logger.warning("WEBHOOK SHOP DOMAIN: %s", shop_domain)
+
+    # Build a simple event (will be improved later)
     product = {
         "id": data.get("id"),
         "title": data.get("title"),
@@ -83,10 +83,10 @@ def product_deleted_webhook():
         "received_at": datetime.utcnow().isoformat() + "Z",
     }
 
-    # Log the parsed event too (for easier reading)
-    app.logger.info("Product deleted webhook PARSED event: %s", event)
+    # Also log the parsed event
+    app.logger.warning("WEBHOOK PARSED EVENT: %s", event)
 
-    # Optional: keep writing to file as before
+    # Write to file (optional but useful)
     try:
         with open(LOG_FILE, "a", encoding="utf-8") as f:
             f.write(json.dumps(event, ensure_ascii=False) + "\n")
@@ -94,3 +94,8 @@ def product_deleted_webhook():
         app.logger.error("Failed to write log file: %s", e)
 
     return jsonify({"status": "ok"}), 200
+
+
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 3000))
+    app.run(host="0.0.0.0", port=port)
