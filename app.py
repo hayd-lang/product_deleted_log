@@ -17,8 +17,12 @@ def health():
     return "Shopify product deleted logger is running", 200
 
 
-@app.route("/shopify/product-deleted", methods=["POST"])
+@app.route("/shopify/product-deleted", methods=["POST", "GET"])
+
 def product_deleted():
+    if request.method == "GET":
+        return jsonify({"status": "ok", "info": "GET received on product-deleted endpoint"}), 200
+        
     if FLOW_WEBHOOK_TOKEN:
         header_token = request.headers.get("X-Flow-Token")
         if header_token != FLOW_WEBHOOK_TOKEN:
