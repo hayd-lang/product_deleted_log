@@ -56,26 +56,37 @@ if __name__ == "__main__":
 
 @app.route("/shopify/product-deleted-webhook", methods=["POST"])
 def product_deleted_webhook():
+    # Get JSON that Shopify sent
     data = request.get_json(silent=True) or {}
+
+    # Store domain from headers
+    shop_domain = request.headers.get("X-Shopify-Shop-Domain")
+
+    # Log EVERYTHING so we can see what Shopify sends
+    app.logger.info("Product deleted webhook RAW headers: %s", dict(request.headers))
+    app.logger.info("Product deleted webhook RAW body: %s", data)
+
+    # Extract a few important fields (will be None if missing)
+    product = {
+        "id": data.get("id"),
+        "title": data.get("title"),
+        "handle": data.get("handle"),
+        "vendor": data.get("vendor"),
+        "product_type": data.get("product_type"),
+    }
 
     event = {
         "event_type": "product_deleted",
-        "product": {
-            "id": data.get("id"),
-            "title": data.get("title"),
-            "handle": data.get("handle"),
-            "vendor": data.get("vendor")
-        },
-        "shop": request.headers.get("X-Shopify-Shop-Domain"),
-        "user_id": data.get("admin_graphql_api_id"),
+        "shop": {"domain": shop_domain},
+        "product": product,
         "payload": data,
-        "received_at": datetime.utcnow().isoformat() + "Z"
+        "received_at": datetime.utcnow().isoformat() + "Z",
     }
 
-    # log
-    app.logger.info("Product deleted webhook: %s", event)
+    # Log the parsed event too (for easier reading)
+    app.logger.info("Product deleted webhook PARSED event: %s", event)
 
-    # write to file
+    # Optional: keep writing to file as before
     try:
         with open(LOG_FILE, "a", encoding="utf-8") as f:
             f.write(json.dumps(event, ensure_ascii=False) + "\n")
